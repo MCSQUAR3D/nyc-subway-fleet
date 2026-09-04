@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#111827">
+<title>NYC Subway Fleet Identifier</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f3f4f6;
+    color: #111827;
+  }
+  .app {
+    max-width: 620px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding: 24px 16px 40px;
+  }
+  h1 { margin: 0 0 6px; font-size: 28px; }
+  .subtitle { margin: 0 0 22px; color: #6b7280; }
+  .card {
+    background: white;
+    border-radius: 18px;
+    padding: 18px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.08);
+  }
+  label { display:block; font-weight: 600; margin-bottom: 8px; }
+  input {
+    width: 100%;
+    font-size: 20px;
+    padding: 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    outline: none;
+  }
+  input:focus { border-color: #6b7280; }
+  button {
+    width: 100%;
+    margin-top: 10px;
+    padding: 14px;
+    border: 0;
+    border-radius: 12px;
+    background: #111827;
+    color: white;
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .result h2 { margin: 0 0 4px; font-size: 25px; }
+  .fleet { color: #4b5563; margin-bottom: 16px; }
+  .row { padding: 10px 0; border-top: 1px solid #e5e7eb; }
+  .key { font-weight: 700; display:block; margin-bottom: 3px; }
+  .unknown { color: #b91c1c; font-weight: 600; }
+  .hidden { display:none; }
+  .small { color:#6b7280; font-size:14px; margin-top:12px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>🚇 NYC Subway Fleet Identifier</h1>
+  <p class="subtitle">Enter a subway car number to identify its fleet.</p>
+
+  <div class="card">
+    <label for="car">Car number</label>
+    <input id="car" autocomplete="off" autocapitalize="characters"
+           placeholder="Example: 8567" inputmode="text">
+    <button onclick="identify()">Identify Car</button>
+    <p class="small">The database uses the fleet information from your Python version.</p>
+  </div>
+
+  <div id="result" class="card result hidden"></div>
+</div>
+
+<script>
+const fleets = {
+  "R62": {
+    ranges:[[1301,1625]], builder:"Kawasaki Heavy Industries", years:"1983–1985",
+    lines:"1, 3, 4, 6, 42nd Street Shuttle", division:"A Division",
+    factory:"5-car units", passenger:"5 or 10 cars, depending on assignment",
+    built:"325 cars / 65 five-car units",
+    notes:"One of the two remaining SMEE-era A Division fleets."
+  },
+  "R62A": {
+    ranges:[[1651,2475]], builder:"Bombardier Transportation", years:"1984–1987",
+    lines:"1, 3, 4, 6, 42nd Street Shuttle", division:"A Division",
+    factory:"5-car units and individual cars", passenger:"5 or 10 cars",
+    built:"825 cars",
+    notes:"Some R62As originally individual cars later organized into 5-car sets."
+  },
+  "R142": {
+    ranges:[[1101,1250],[6301,7180]], builder:"Bombardier Transportation", years:"1999–2003",
+    lines:"2, 4, 5, 6", division:"A Division", factory:"5-car units",
+    passenger:"10 cars", built:"1,030 cars / 206 five-car units",
+    notes:"A-B-B-B-A configuration."
+  },
+  "R142A": {
+    ranges:[[7591,7810]], builder:"Kawasaki Heavy Industries", years:"1999–2004",
+    lines:"4, 6", division:"A Division", factory:"5-car units",
+    passenger:"10 cars", built:"220 cars / 44 five-car units",
+    notes:"Originally 600 cars remained in R142A fleet; 380 cars (7211–7590) converted to R188s."
+  },
+  "R188": {
+    ranges:[[7211,7590],[7811,7936]], builder:"Kawasaki Heavy Industries", years:"2010–2016",
+    lines:"7", division:"A Division", factory:"5-car and 6-car units",
+    passenger:"11 cars", built:"506 cars / 46 eleven-car trains",
+    notes:"380 converted from R142As and 126 newly built; 7 uses 11-car trains."
+  },
+  "R143": {
+    ranges:[[8101,8312]], builder:"Kawasaki Heavy Industries", years:"2001–2003",
+    lines:"L", division:"B Division", factory:"4-car units",
+    passenger:"8 cars", built:"212 cars / 53 four-car units",
+    notes:"Four-car units normally coupled to make 8-car L trains."
+  },
+  "R160A": {
+    ranges:[[8313,8712],[9233,9802],[9943,9974]], builder:"Alstom", years:"2005–2010",
+    lines:"A, C, E, F, G, J, M, N, Q, R, W, Z", division:"B Division",
+    factory:"4 or 5 cars", passenger:"8 or 10 cars", built:"1,002 cars",
+    notes:"4-car sets: 8313–8652 and 9943–9974. 5-car sets: 8653–8712 and 9233–9802."
+  },
+  "R160B": {
+    ranges:[[8713,9232],[9803,9942]], builder:"Alstom / Siemens", years:"2005–2010",
+    lines:"A, C, E, F, G, J, M, N, Q, R, W, Z", division:"B Division",
+    factory:"5 cars", passenger:"10 cars", built:"660 cars / 132 five-car units",
+    notes:"All arranged as 5-car sets."
+  },
+  "R179": {
+    ranges:[[3010,3327]], builder:"Bombardier Transportation", years:"2016–2019",
+    lines:"A, C, J, M, Z, Rockaway Park Shuttle", division:"B Division",
+    factory:"4 or 5 cars", passenger:"4, 5, 8 or 10 cars, depending on configuration",
+    built:"318 cars — 47 four-car sets and 26 five-car sets",
+    notes:"3010–3049 and 3238–3327 are five-car sets. 3050–3237 are four-car sets."
+  },
+  "R211A": {
+    ranges:[[4060,4499]], builder:"Kawasaki Heavy Industries", years:"2021–present",
+    lines:"A, C", division:"B Division", factory:"5 cars",
+    passenger:"5 or 10 cars, depending on use", built:"440 cars / 88 five-car units",
+    notes:"Standard closed-gangway R211 family version. Entered passenger service on A in 2023; program still being delivered."
+  },
+  "R46": {
+    ranges:[[5482,6207]], builder:"Pullman-Standard", years:"1974–1975",
+    lines:"A, C, F, R, W, Rockaway Park Shuttle", division:"B Division",
+    factory:"4 cars", passenger:"8 cars", built:"752 cars / 188 four-car units",
+    notes:"4-car units normally coupled into 8-car trains. Cars 6208–6258 are even-numbered only."
+  },
+  "R68": {
+    ranges:[[2500,2924]], builder:"Westinghouse-Amrail / ANF", years:"1986–1988",
+    lines:"B, D, N, Q, W, Franklin Avenue Shuttle", division:"B Division",
+    factory:"Individual cars", passenger:"4 or 8 cars", built:"425 cars",
+    notes:"Most organized into four-car sets; 2916–2924 individual cars used on Franklin Avenue Shuttle."
+  },
+  "R68A": {
+    ranges:[[5001,5200]], builder:"Kawasaki Heavy Industries", years:"1988–1989",
+    lines:"B, D, N, Q, W", division:"B Division",
+    factory:"Individual cars", passenger:"4 or 8 cars", built:"200 cars",
+    notes:"Originally individual cars; most now four-car sets."
+  },
+  "R211S": {
+    ranges:[[100,174]], builder:"Kawasaki Heavy Industries", years:"2021–2025",
+    lines:"Staten Island Railway", division:"Staten Island Railway",
+    factory:"5 cars", passenger:"5 cars", built:"75 cars / 15 five-car units",
+    notes:"Replaced R44s as the entire regular SIR fleet; complete 75-car order delivered."
+  },
+  "R37": {
+    ranges:[[50,53]], builder:"General Electric", years:"1965", lines:"Systemwide work service",
+    division:"Work Equipment", factory:"Individual locomotive", passenger:"N/A",
+    built:"4 locomotives", notes:"Non-passenger maintenance locomotives."
+  },
+  "R41": {
+    ranges:[[54,59]], builder:"General Electric", years:"1968", lines:"Systemwide work service",
+    division:"Work Equipment", factory:"Individual locomotive", passenger:"N/A",
+    built:"6 locomotives", notes:"Work locomotives."
+  },
+  "R43": {
+    ranges:[[60,62]], builder:"General Electric", years:"1971", lines:"Systemwide work service",
+    division:"Work Equipment", factory:"Individual locomotive", passenger:"N/A",
+    built:"3 locomotives", notes:"Maintenance/work use."
+  },
+  "R47": {
+    ranges:[[63,70]], builder:"General Electric", years:"1975", lines:"Systemwide work service",
+    division:"Work Equipment", factory:"Individual locomotive", passenger:"N/A",
+    built:"8 locomotives", notes:"Work locomotives."
+  },
+  "R52": {
+    ranges:[[71,82]], builder:"General Electric", years:"1977", lines:"Systemwide work service",
+    division:"Work Equipment", factory:"Individual locomotive", passenger:"N/A",
+    built:"12 locomotives", notes:"45-ton diesel-electric work locomotives."
+  },
+  "R120": {
+    ranges:[[903,909]], builder:"Republic Locomotive Works", years:"1990–1991",
+    lines:"Systemwide", division:"Work Equipment", factory:"Individual locomotives",
+    passenger:"N/A", built:"7 locomotives", notes:"Diesel work locomotives."
+  },
+  "R156": {
+    ranges:[[912,939]], builder:"MotivePower", years:"2012–2013",
+    lines:"Systemwide", division:"Work Equipment", factory:"Individual locomotives",
+    passenger:"N/A", built:"28 locomotives", notes:"Modern diesel work locomotives."
+  },
+  "R257": {
+    ranges:[[873,882]], builder:"Cad Railway Industries", years:"2021–2026 rebuild program",
+    lines:"Systemwide", division:"Work Equipment", factory:"Individual locomotives",
+    passenger:"N/A", built:"10",
+    notes:"Rebuilt from older R77E locomotives; program progressing through the 2020s."
+  }
+};
+
+function inRange(n, ranges) {
+  return ranges.some(([a,b]) => n >= a && n <= b);
+}
+
+function identifyCar(input) {
+  const n = Number(input);
+
+  if (Number.isInteger(n)) {
+    if (n >= 5482 && n <= 6207) return ["R46", null];
+    if (n >= 6208 && n <= 6258 && n % 2 === 0) return ["R46", null];
+
+    if (n >= 8713 && n <= 8842) return ["R160B", "R160B-1"];
+    if (n >= 8843 && n <= 9102) return ["R160B", "R160B-2"];
+    if (n >= 9103 && n <= 9232) return ["R160B", "R160B-1"];
+    if (n >= 9803 && n <= 9942) return ["R160B", "R160B-1"];
+
+    if (n >= 8313 && n <= 8652) return ["R160A", "4-car set"];
+    if (n >= 8653 && n <= 8712) return ["R160A", "5-car set"];
+    if (n >= 9233 && n <= 9802) return ["R160A", "5-car set"];
+    if (n >= 9943 && n <= 9974) return ["R160A", "4-car set"];
+
+    if (n >= 3010 && n <= 3049) return ["R179", "5-car set"];
+    if (n >= 3050 && n <= 3237) return ["R179", "4-car set"];
+    if (n >= 3238 && n <= 3327) return ["R179", "5-car set"];
+
+    for (const [fleet, data] of Object.entries(fleets)) {
+      if (inRange(n, data.ranges)) return [fleet, null];
+    }
+  }
+
+  return null;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+function identify() {
+  const input = document.getElementById("car").value.trim().toUpperCase();
+  const result = document.getElementById("result");
+
+  if (!input) {
+    result.classList.remove("hidden");
+    result.innerHTML = '<div class="unknown">Please enter a car number.</div>';
+    return;
+  }
+
+  const found = identifyCar(input);
+
+  if (!found) {
+    result.classList.remove("hidden");
+    result.innerHTML = `<div class="unknown">I don't have enough information to identify this car.</div>`;
+    return;
+  }
+
+  const [fleet, extra] = found;
+  const d = fleets[fleet];
+
+  result.classList.remove("hidden");
+  result.innerHTML = `
+    <h2>${escapeHtml(fleet)}</h2>
+    <div class="fleet">Car number: <strong>${escapeHtml(input)}</strong></div>
+    ${extra ? `<div class="row"><span class="key">Configuration / subtype</span>${escapeHtml(extra)}</div>` : ""}
+    <div class="row"><span class="key">Builder</span>${escapeHtml(d.builder)}</div>
+    <div class="row"><span class="key">Years built</span>${escapeHtml(d.years)}</div>
+    <div class="row"><span class="key">Lines</span>${escapeHtml(d.lines)}</div>
+    <div class="row"><span class="key">Division</span>${escapeHtml(d.division)}</div>
+    <div class="row"><span class="key">Factory version</span>${escapeHtml(d.factory)}</div>
+    <div class="row"><span class="key">Passenger version</span>${escapeHtml(d.passenger)}</div>
+    <div class="row"><span class="key">Fleet size</span>${escapeHtml(d.built)}</div>
+    <div class="row"><span class="key">Notes</span>${escapeHtml(d.notes)}</div>
+  `;
+}
+
+document.getElementById("car").addEventListener("keydown", e => {
+  if (e.key === "Enter") identify();
+});
+</script>
+</body>
+</html>
